@@ -146,7 +146,6 @@ class SparkEngine():
             driver = "oracle.jdbc.driver.OracleDriver"
             return self._ctx.read.format('jdbc').option('url', url)\
                   .option("dbtable", md['path']).option("driver", driver)\
-                  .option("user",pd['username']).option('password',pd['password'])\
                   .load(**options)
         else:
             raise('downt know how to handle this')
@@ -226,6 +225,13 @@ class SparkEngine():
             return obj.write.format('jdbc').option('url', url)\
                    .option("dbtable", md['path']).option("driver", driver)\
                    .option("user",pd['username']).option('password',pd['password'])\
+                   .save(**kargs)
+	elif pd['service'] == 'oracle':
+            url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pd['username'],pd['password'],pd['hostname'],pd.get('port', '1521'),pd['database'])
+            print(url)
+            driver = "oracle.jdbc.driver.OracleDriver"
+            return obj.write.format('jdbc').option('url', url)\
+                   .option("dbtable", md['path']).option("driver", driver)\
                    .save(**kargs)
         else:
             raise('downt know how to handle this')
