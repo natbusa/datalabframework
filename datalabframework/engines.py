@@ -157,6 +157,14 @@ class SparkEngine():
                 .option("user", pmd['username']) \
                 .option('password', pmd['password']) \
                 .load(**options)
+        elif pmd['service'] == 'oracle':
+            url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pmd['username'], pmd['password'], pmd['hostname'],
+                                                             pmd.get('port', '1521'), pmd['database'])
+            print(url)
+            driver = "oracle.jdbc.driver.OracleDriver"
+            return self._ctx.read.format('jdbc').option('url', url) \
+                .option("dbtable", md['path']).option("driver", driver) \
+                .load(**options)
         elif pmd['service'] == 'elastic':
             # uri = 'http://{}:{}/{}'.format(pmd["hostname"], pmd["port"], md['path'])
             # print(options)
@@ -257,6 +265,14 @@ class SparkEngine():
             else:
                 mode = "append"
             elatic_write(obj, uri, mode, rmd["path"], options["settings"], options["mappings"])
+        elif pmd['service'] == 'oracle':
+            url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pmd['username'], pmd['password'], pmd['hostname'],
+                                                             pmd.get('port', '1521'), pmd['database'])
+            print(url)
+            driver = "oracle.jdbc.driver.OracleDriver"
+            return obj.write.format('jdbc').option('url', url) \
+                .option("dbtable", md['path']).option("driver", driver) \
+                .save(**kargs)
         else:
             raise('downt know how to handle this')
 
