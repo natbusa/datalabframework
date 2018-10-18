@@ -8,7 +8,9 @@ from . import utils
 from . import project
 import elasticsearch.helpers
 import json
+from datetime import date, timedelta, datetime
 import pyspark
+from pyspark.sql.functions import desc, lit
 
 from . import logging
 logger = logging.getLogger()
@@ -155,10 +157,10 @@ class SparkEngine():
                 .option("user", pmd['username']) \
                 .option('password', pmd['password']) \
                 .load(**options)
-		elif pmd['service'] == 'oracle':
-		    driver = "oracle.jdbc.driver.OracleDriver"
-			obj = self._ctx.read \
-			    .format('jdbc') \
+        elif pmd['service'] == 'oracle':
+            driver = "oracle.jdbc.driver.OracleDriver"
+            obj = self._ctx.read \
+                .format('jdbc') \
                 .option('url', url) \
                 .option("dbtable", rmd['path']) \
                 .option("driver", driver) \
@@ -254,7 +256,7 @@ class SparkEngine():
                 .option("user", pmd['username']) \
                 .option('password', pmd['password']) \
                 .save(**kargs)
-		elif pmd['service'] == 'oracle':
+        elif pmd['service'] == 'oracle':
             driver = "oracle.jdbc.driver.OracleDriver"
             obj.write \
                 .format('jdbc') \
@@ -280,6 +282,100 @@ class SparkEngine():
         results = elastic_read(url, query)
         rows = [pyspark.sql.Row(**r) for r in results]
         return self.context().createDataFrame(rows)
+
+    def ingest(self, src_resource=None, src_path=None, src_provider=None, 
+                     dest_resource=None, dest_path=None, dest_provider=None, ingest_options=None):
+        #0. Process parameteers
+        md_src = data.metadata(src_resource, src_path, src_provider)
+        if not md_src:
+            print('no valid source resource found')
+            return
+
+        pd_src = md_src['provider']
+        rs_src =  md_src['resource']
+        options = utils.merge(pd_src.get('ingest',{}), rs_src.get('ingest',{}))
+        options = utils.merge(options, ingest_options)
+
+        if (not dest_resource) and (not dest_path) and dest_provider:
+            dest_path = rs_src['path']
+
+        md_dest = data.metadata(dest_resource, dest_path, dest_provider)
+        if not md_dest:
+            print('no valid destination resource found')
+            return
+
+        #1. Get ingress policy
+        ingest_policy = options.get('policy', 'hash')
+
+        #Get ingest date 
+        yesterday = date.today() - timedelta(1)
+        end_date = options.get('date', yesterday.strftime('%Y-%m-%d'))
+        ingest_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        #Get ingest key column 
+        column = options.get('column', None)
+
+        #Get ingest window
+        window =  options.get('window', None)
+
+        #build condition
+        condition_sql = ''
+
+        if ingest_policy == 'date':
+            condition_sql = '{} <= "{}" '.format(column, end_date)
+            if window:
+                condition_sql += 'and {} <= "{}" '.format(column, (ingest_date + timedelta(window)).strftime('%Y-%m-%d'))
+
+        print('condition: {}'.format(condition_sql))
+
+        ## 2. Get last schema 
+        schema_path = '{}/schema'.format(md_dest['resource']['path'])
+
+        schema_date = ingest_date
+        schema_existed = True
+        try:
+            df_schema = self.read(path=schema_path,provider=dest_provider)
+            schema_date = df_schema.sort(desc("date")).limit(1).collect()[0]['date']
+        except Exception as ex: 
+            logger.error("Not find existed schema file")
+            schema_existed = False
+
+        ## 3. Read all resources and check difference
+        df_src = self.read(path = md_src['resource']['path'], provider = md_src['resource']['provider'])   
+
+        df_path = '{}/{}'.format(md_dest['resource']['path'], schema_date.strftime('%Y-%m-%d'))  ## Pretend first time ingest
+
+        if condition_sql: #date policy
+            diff_df = df_src.where(condition_sql)
+
+        schema_changed = False
+        try:
+            df_dest = self.read(path=df_path, provider=md_dest['resource']['provider'])
+            df_dest = df_dest.drop('ingest_date') if 'ingest_date' in df_dest.columns else df_dest
+
+            if condition_sql: #date policy 
+                #Apply condition to both source and destination
+                df_dest = df_dest.where(condition_sql) 
+
+            #Check difference in schemas
+            if df_src.schema.json == df_dest.schema.json:
+                diff_df = diff_df.subtract(df_dest)
+            else:
+                schema_changed = True
+        except Exception as ex: 
+            logger.error("Error read destination.")
+
+        if schema_changed or not schema_existed:
+            #Different schema, update new
+            new_df_schema = self._ctx.createDataFrame([(ingest_date,)], ['date'])
+            self.write(new_df_schema, path=schema_path, provider=md_dest['resource']['provider'], mode='append')
+            #Update new data object name
+            df_path = '{}/{}'.format(dest_path, end_date)
+
+        ### 4. Store dataframe 
+        if diff_df.count():
+            diff_df = diff_df.withColumn('ingest_date', lit(end_date))
+            self.write(diff_df, path=df_path, provider=md_dest['resource']['provider'], mode='append', partitionBy='ingest_date')
 
 def elastic_read(url, query):
     """
