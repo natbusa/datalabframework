@@ -166,7 +166,7 @@ class SparkEngine():
 #             print(rmd['path'])
             driver = "oracle.jdbc.driver.OracleDriver"
             return self._ctx.read.format('jdbc').option('url', url) \
-                .option("dbtable", "{}.{}".format(pmd['database'], "QR_Transaction_Refund").option("driver", driver) \
+                .option("dbtable", "{}.{}".format(pmd['database'], rmd['path']).option("driver", driver) \
                 .load(**options)
         elif pmd['service'] == 'elastic':
             # uri = 'http://{}:{}/{}'.format(pmd["hostname"], pmd["port"], md['path'])
