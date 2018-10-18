@@ -85,6 +85,7 @@ class SparkEngine():
             print('no valid resource found')
             return
 
+        utils.pretty_print(md)
         pmd = md['provider']
         rmd = md['resource']
 
@@ -159,11 +160,13 @@ class SparkEngine():
                 .load(**options)
         elif pmd['service'] == 'oracle':
             url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pmd['username'], pmd['password'], pmd['hostname'],
-                                                             pmd.get('port', '1521'), pmd['database'])
+                                                             pmd.get('port', '1521'), pmd['sid'])
             print(url)
+            print(pmd['database'])
+#             print(rmd['path'])
             driver = "oracle.jdbc.driver.OracleDriver"
             return self._ctx.read.format('jdbc').option('url', url) \
-                .option("dbtable", md['path']).option("driver", driver) \
+                .option("dbtable", "{}.{}".format(pmd['database'], "QR_Transaction_Refund").option("driver", driver) \
                 .load(**options)
         elif pmd['service'] == 'elastic':
             # uri = 'http://{}:{}/{}'.format(pmd["hostname"], pmd["port"], md['path'])
