@@ -85,7 +85,6 @@ class SparkEngine():
             print('no valid resource found')
             return
 
-        utils.pretty_print(md)
         pmd = md['provider']
         rmd = md['resource']
 
