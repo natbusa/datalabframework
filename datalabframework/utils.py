@@ -1,11 +1,28 @@
 import errno
 import os
 
-import yaml
 import json
 import jsonschema
 
-from jinja2 import Template, filters
+import sys
+from ruamel.yaml import YAML
+from ruamel.yaml.compat import StringIO
+
+class StringDumpYAML(YAML):
+    def dump(self, data, stream=None, **kw):
+        inefficient = False
+        if stream is None:
+            inefficient = True
+            stream = StringIO()
+        YAML.dump(self, data, stream, **kw)
+        if inefficient:
+            return stream.getvalue()
+
+yaml=StringDumpYAML()
+yaml.preserve_quotes = True
+yaml.indent(mapping=4, sequence=4, offset=2)
+
+from jinja2 import Environment, Template, filters
 
 from copy import deepcopy
 
@@ -70,19 +87,20 @@ def get_project_files(ext, rootpath='.', exclude_dirs=[], ignore_dir_with_file='
 #get_project_files(ext='.ipynb', exclude_dirs=['.ipynb_checkpoints'])
 
 def pretty_print(metadata):
-    print(yaml.dump(metadata, indent=2, default_flow_style=False))
+    yaml.dump(metadata, sys.stdout)
 
+def render(m, passes=3):
+    env = Environment()
+    env.globals['env'] = lambda key, value=None: os.getenv(key, value)
+    env.filters['env'] = lambda value, key: os.getenv(key, value)
 
-def render(m, passes=10):
     doc = yaml.dump(m)
-
-    filters.FILTERS['env'] = lambda value, key: os.getenv(key, value)
     for i in range(passes):
-        template = Template(doc)
-        doc = template.render(yaml.load(doc))
+        template = env.from_string(doc)
+        dictionary = yaml.load(doc)
+        doc = template.render(dictionary)
 
-    doc = yaml.load(doc)
-    return doc
+    return yaml.load(doc)
 
 def ensure_dir_exists(path, mode=0o777):
     """ensure that a directory exists

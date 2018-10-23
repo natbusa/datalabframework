@@ -4,7 +4,7 @@ from setuptools import setup
 #llll
 # the name of the package
 name = 'datalabframework'
-submodules = ['cli']
+submodules = ['cli', 'spark']
 packages = [name] + ['{}.{}'.format(name, sm) for sm in submodules]
 
 pjoin = os.path.join
@@ -36,14 +36,15 @@ setup_args = dict(
 
 setup_args['install_requires']=[
     'requests',
-    'pyyaml',
+    'ruamel.yaml',
     'jinja2',
     'ipykernel',
     'traitlets',
     'cookiecutter',
     'elasticsearch',
     'gitpython',
-    'jsonschema'
+    'jsonschema',
+    'python-dateutil'
 ]
 
 setup_args['include_package_data'] = True

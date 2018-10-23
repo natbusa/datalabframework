@@ -7,7 +7,7 @@ from . import params
 from . import data
 from . import engines
 from . import project
-
+from . import utils
 # local builtin global __DATALABFRAMEWORK__
 # in the current python context (super global)
 from . import _version
@@ -23,5 +23,6 @@ __all__ = [
     'project',
     'params',
     'data',
-    'engines'
+    'engines',
+    'utils'
 ]

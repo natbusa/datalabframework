@@ -67,6 +67,7 @@ def metadata(resource=None, path=None, provider=None):
             }
     else:
         print('Resource not found: must specify either path and provider alias, or the resource alias')
+        print('resource={}, path={}, provider={}'.format(resource, path, provider))
         return None
 
     d['url'] = _url(d)

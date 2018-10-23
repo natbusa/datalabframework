@@ -1,19 +1,23 @@
 import os
 
-from jinja2 import Template
+from datalabframework.spark.mapping import transform as mapping_transform
+from datalabframework.spark.filter import transform as filter_transform
 
 from . import params
 from . import data
 from . import utils
-from . import project
+
 import elasticsearch.helpers
-import json
+
 from datetime import date, timedelta, datetime
+
 import pyspark
 from pyspark.sql.functions import desc, lit
 
 from . import logging
 logger = logging.getLogger()
+
+import pandas as pd
 
 # purpose of engines
 # abstract engine init, data read and data write
@@ -82,7 +86,6 @@ class SparkEngine():
     def read(self, resource=None, path=None, provider=None, **kargs):
         md = data.metadata(resource, path, provider)
         if not md:
-            print('no valid resource found')
             return
 
         pmd = md['provider']
@@ -98,6 +101,12 @@ class SparkEngine():
 
         coalesce = pmd.get('read',{}).get('coalesce', None)
         coalesce = rmd.get('read',{}).get('coalesce', coalesce)
+
+        mapping = pmd.get('read', {}).get('mapping', None)
+        mapping = rmd.get('read', {}).get('mapping', mapping)
+
+        filter = pmd.get('read', {}).get('filter', None)
+        filter = rmd.get('read', {}).get('filter', filter)
 
         # override options on provider with options on resource, with option on the read method
         options = utils.merge(pmd.get('read',{}).get('options',{}), rmd.get('read',{}).get('options',{}))
@@ -174,6 +183,8 @@ class SparkEngine():
         else:
             raise('downt know how to handle this')
 
+        obj = filter_transform(obj,filter) if filter else obj
+        obj = mapping_transform(obj, mapping) if mapping else obj
         obj = obj.repartition(repartition) if repartition else obj
         obj = obj.coalesce(coalesce) if coalesce else obj
         obj = obj.cache() if cache else obj
@@ -186,7 +197,6 @@ class SparkEngine():
     def write(self, obj, resource=None, path=None, provider=None, **kargs):
         md = data.metadata(resource, path, provider)
         if not md:
-            print('no valid resource found')
             return
 
         pmd = md['provider']
@@ -194,8 +204,8 @@ class SparkEngine():
 
         url = md['url']
 
-        cache = pmd.get('read',{}).get('cache', False)
-        cache = rmd.get('read',{}).get('cache', cache)
+        cache = pmd.get('write',{}).get('cache', False)
+        cache = rmd.get('write',{}).get('cache', cache)
 
         repartition = pmd.get('write',{}).get('repartition', None)
         repartition = rmd.get('write',{}).get('repartition', repartition)
@@ -203,13 +213,21 @@ class SparkEngine():
         coalesce = pmd.get('write',{}).get('coalesce', None)
         coalesce = rmd.get('write',{}).get('coalesce', coalesce)
 
+        mapping = pmd.get('write', {}).get('mapping', None)
+        mapping = rmd.get('write', {}).get('mapping', mapping)
+
+        filter = pmd.get('write', {}).get('filter', None)
+        filter = rmd.get('write', {}).get('filter', filter)
+
         # override options on provider with options on resource, with option on the read method
         options = utils.merge(pmd.get('write',{}).get('options',{}), rmd.get('write',{}).get('options',{}))
         options = utils.merge(options, kargs)
 
-        obj = obj.repartition(repartition) if repartition else obj
-        obj = obj.coalesce(coalesce) if coalesce else obj
         obj = obj.cache() if cache else obj
+        obj = obj.coalesce(coalesce) if coalesce else obj
+        obj = obj.repartition(repartition) if repartition else obj
+        obj = filter_transform(obj, mapping) if mapping else obj
+        obj = mapping_transform(obj, mapping) if mapping else obj
 
         if pmd['service'] in ['sqlite', 'mysql', 'postgres', 'mssql']:
             format = pmd.get('format', 'rdbms')
@@ -260,17 +278,11 @@ class SparkEngine():
                 .save(**kargs)
         elif pmd['service'] == 'elastic':
             uri = 'http://{}:{}'.format(pmd["hostname"], pmd["port"])
-
-            # print(options)
-            if "mode" in kargs and kargs.get("mode") == "overwrite":
-                mode = "overwrite"
-            else:
-                mode = "append"
-            elatic_write(obj, uri, mode, rmd["path"], options["settings"], options["mappings"])
+            mode = kargs.get("mode", None)
+            elastic_write(obj, uri, mode, rmd["path"], options["settings"], options["mappings"])
         elif pmd['service'] == 'oracle':
             url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pmd['username'], pmd['password'], pmd['hostname'],
                                                              pmd.get('port', '1521'), pmd['database'])
-            print(url)
             driver = "oracle.jdbc.driver.OracleDriver"
             obj.write.format('jdbc').option('url', url) \
                 .option("dbtable", md['path']).option("driver", driver) \
@@ -285,125 +297,82 @@ class SparkEngine():
         rows = [pyspark.sql.Row(**r) for r in results]
         return self.context().createDataFrame(rows)
 
-    def ingest(self, src_resource=None, src_path=None, src_provider=None, 
-                     dest_resource=None, dest_path=None, dest_provider=None, ingest_options=None):
-        #0. Process parameteers
+    def ingest(self, src_resource=None, src_path=None, src_provider=None,
+                     dest_resource=None, dest_path=None, dest_provider=None, **kargs):
+
+        # contants:
+        now = datetime.now()
+
+        # unput parameters:
         md_src = data.metadata(src_resource, src_path, src_provider)
         if not md_src:
-            print('no valid source resource found')
             return
 
-        pd_src = md_src['provider']
-        rs_src =  md_src['resource']
-        options = utils.merge(pd_src.get('ingest',{}), rs_src.get('ingest',{}))
-        options = utils.merge(options, ingest_options)
-
+        # default path for destination is src path
         if (not dest_resource) and (not dest_path) and dest_provider:
-            dest_path = rs_src['path']
+            dest_path = md_src['resource']['path']
 
         md_dest = data.metadata(dest_resource, dest_path, dest_provider)
         if not md_dest:
-            print('no valid destination resource found')
             return
 
-        #1. Get ingress policy
-        ingest_policy = options.get('policy', 'hash')
-
-        #Get ingest date 
-        yesterday = date.today() - timedelta(1)
-        end_date = options.get('date', yesterday.strftime('%Y-%m-%d'))
-        ingest_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-
-        #Get ingest key column 
-        column = options.get('column', None)
-
-        #Get ingest window
-        window =  options.get('window', None)
-
-        #build condition
-        condition_sql = ''
-
-        if ingest_policy == 'date':
-            condition_sql = '{} <= "{}" '.format(column, end_date)
-            if window:
-                condition_sql += 'and {} <= "{}" '.format(column, (ingest_date + timedelta(window)).strftime('%Y-%m-%d'))
-
-        print('condition: {}'.format(condition_sql))
-
-        ## 2. Get last schema 
-        schema_path = '{}/schema'.format(md_dest['resource']['path'])
-
-        schema_date = ingest_date
-        schema_existed = True
         try:
+            df_src = self.read(path = md_src['resource']['path'], provider = md_src['resource']['provider'])
+        except:
+            return
+
+        try:
+            schema_path = '{}/schema'.format(md_dest['resource']['path'])
             df_schema = self.read(path=schema_path,provider=dest_provider)
-            schema_date = df_schema.sort(desc("date")).limit(1).collect()[0]['date']
-        except Exception as ex: 
-            logger.error("Not find existed schema file")
-            schema_existed = False
+            schema_date_str = df_schema.sort(desc("date")).limit(1).collect()[0]['id']
 
-        ## 3. Read all resources and check difference
-        df_src = self.read(path = md_src['resource']['path'], provider = md_src['resource']['provider'])   
+            dest_path = '{}/{}'.format(md_dest['resource']['path'], schema_date_str)
+            df_dest = self.read(path=dest_path, provider=md_dest['resource']['provider'])
 
-        df_path = '{}/{}'.format(md_dest['resource']['path'], schema_date.strftime('%Y-%m-%d'))  ## Pretend first time ingest
+            df_src_cols = [x for x in df_src.columns if x != 'ingest_date']
+            df_dest_cols = [x for x in df_dest.columns if x != 'ingest_date']
+            schema_changed = df_src[df_src_cols].schema.json() != df_dest[df_dest_cols].schema.json()
+        except:
+            schema_changed = True
 
-        if condition_sql: #date policy
-            diff_df = df_src.where(condition_sql)
+        if schema_changed:
+            #Different schema, update schema table with new entry
+            schema_date_str = now.strftime('%Y-%m-%dT%H%M%S')
+            df = pd.DataFrame(columns=['id', 'date', 'schema'], data=[[schema_date_str, now, df_src.schema.json()]])
+            df_schema = self.context().createDataFrame(df)
+            self.write(df_schema, path=schema_path, provider=md_dest['resource']['provider'], mode='append')
+            dest_path = '{}/{}'.format(md_dest['resource']['path'], schema_date_str)
 
-        schema_changed = False
-        try:
-            df_dest = self.read(path=df_path, provider=md_dest['resource']['provider'])
-            df_dest = df_dest.drop('ingest_date') if 'ingest_date' in df_dest.columns else df_dest
+        #diff function goes here
 
-            if condition_sql: #date policy 
-                #Apply condition to both source and destination
-                df_dest = df_dest.where(condition_sql) 
 
-            #Check difference in schemas
-            if df_src.schema.json == df_dest.schema.json:
-                diff_df = diff_df.subtract(df_dest)
-            else:
-                schema_changed = True
-        except Exception as ex: 
-            logger.error("Error read destination.")
-
-        if schema_changed or not schema_existed:
-            #Different schema, update new
-            new_df_schema = self._ctx.createDataFrame([(ingest_date,)], ['date'])
-            self.write(new_df_schema, path=schema_path, provider=md_dest['resource']['provider'], mode='append')
-            #Update new data object name
-            df_path = '{}/{}'.format(dest_path, end_date)
-
-        ### 4. Store dataframe 
-        if diff_df.count():
-            diff_df = diff_df.withColumn('ingest_date', lit(end_date))
-            self.write(diff_df, path=df_path, provider=md_dest['resource']['provider'], mode='append', partitionBy='ingest_date')
+        # copy from src data
+        df_dest = df_src.withColumn('ingest_date', lit(datetime.now().isoformat()))
+        self.write(df_dest, path=dest_path, provider=md_dest['resource']['provider'], mode='append')
 
 def elastic_read(url, query):
     """
-    :param format: spark|python (removed pandas)
-    :param uri:
-    :param action:
+    :param url:
     :param query:
-    :param kargs:
-    :return:
+    :return: python list of dict
 
     sample resource:
-    - variables are enclosed in [[ ]] instead of {{ }}
+    variables:
+        size: 10
+        from: 0
+        query: "laptop"
     keywords_search:
         provider: elastic_test
-        #index: search_keywords_dev
         path: /search_keywords_dev/keyword/
-        search: _search
         query: >
             {
-              "size" : 2,
-              "from" : 0,
+              "size" : "{{ default.variables.size }}",
+              "from" : "{{ default.variables.size }}",
               "query": {
                 "function_score": {
                   "query": {
                       "match" : {
-                        "query_wo_tones": {"query":"[[query]]", "operator" :"or", "fuzziness":"AUTO"}
+                        "query_wo_tones": {"query":"{{ default.variables.query }}", "operator" :"or", "fuzziness":"AUTO"}
                     }
                   },
                   "script_score" : {
@@ -415,11 +384,6 @@ def elastic_read(url, query):
                 }
               }
             }
-    :param resource:
-    :param path:
-    :param provider:
-    :param kargs: params to replace in `query` template
-    :return: pandas dataframe
     """
 
     try:
@@ -445,17 +409,15 @@ def elastic_read(url, query):
     return hits2
 
 
-def elatic_write(obj, uri, mode='append', indexName=None, settings=None, mappings=None):
+def elastic_write(obj, uri, mode='append', indexName=None, settings=None, mappings=None):
     """
     :param mode: overwrite | append
-    :param obj: spark dataframe, pandas dataframe, or list of Python dictionaries
-    :param kargs:
+    :param obj: spark dataframe, or list of Python dictionaries
     :return:
     """
     es = elasticsearch.Elasticsearch([uri])
     if mode == "overwrite":
-        if isinstance(mappings["properties"], str): # original properties JSON in Elastics format
-            # properties: >
+            # properties:
             #                 {
             #                     "count": {
             #                         "type": "integer"
@@ -473,50 +435,45 @@ def elatic_write(obj, uri, mode='append', indexName=None, settings=None, mapping
             #                         }
             #                     }
             #                 }
-            mappings["properties"] = json.loads(mappings["properties"])
-        else: # dictionary
-            #             properties:
-            #                 count: integer
-            #                 keyword: keyword
-            #                 query:
-            #                     type: text
-            #                     fields:
-            #                         keyword:
-            #                             type: keyword
-            #                             ignore_above: 256
-            #                 query_wo_tones:
-            #                     type: text
-            #                     fields:
-            #                         keyword:
-            #                             type: keyword
-            #                             ignore_above: 256
-            for k, v in mappings["properties"].items():
-                if isinstance(mappings["properties"][k], str):
-                    mappings["properties"][k] = {"type":mappings["properties"][k]}
-
-        if isinstance(settings, str):  # original settings JSON in Elastics format
-            #       settings: >
-            #                 {
-            #                     "index": {
-            #                         "number_of_shards": 1,
-            #                         "number_of_replicas": 3,
-            #                         "mapping": {
-            #                             "total_fields": {
-            #                                 "limit": "1024"
-            #                             }
-            #                         }
+            # OR:
+            # properties:
+            #     count: integer
+            #     keyword: keyword
+            #     query:
+            #         type: text
+            #         fields:
+            #             keyword:
+            #                 type: keyword
+            #                 ignore_above: 256
+            #     query_wo_tones:
+            #         type: text
+            #         fields:
+            #             keyword:
+            #                 type: keyword
+            #                 ignore_above: 256
+        for k, v in mappings["properties"].items():
+            if isinstance(mappings["properties"][k], str):
+                mappings["properties"][k] = {"type":mappings["properties"][k]}
+            # settings:
+            #         {
+            #             "index": {
+            #                 "number_of_shards": 1,
+            #                 "number_of_replicas": 3,
+            #                 "mapping": {
+            #                     "total_fields": {
+            #                         "limit": "1024"
             #                     }
             #                 }
-            settings = json.loads(settings)
-        else: # yaml object parsed into python dictionary
-            #         settings:
-            #             index:
-            #                 number_of_shards: 1
-            #                 number_of_replicas: 3
-            #                 mapping:
-            #                     total_fields:
-            #                         limit: 1024
-            pass
+            #             }
+            #         }
+            # OR:
+            # settings:
+            #     index:
+            #         number_of_shards: 1
+            #         number_of_replicas: 3
+            #         mapping:
+            #             total_fields:
+            #                 limit: 1024
 
         print(settings)
         print(mappings["properties"])
@@ -532,8 +489,10 @@ def elatic_write(obj, uri, mode='append', indexName=None, settings=None, mapping
                 }
             }
         })
-    else: # append
+    elif mode == "append": # append
         pass
+    else:
+        raise ValueError("Unsupported mode: " + mode)
 
     # import pandas.core.frame
     # import pyspark.sql.dataframe

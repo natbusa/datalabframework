@@ -50,11 +50,6 @@ class LoggerAdapter(logging.LoggerAdapter):
         kwargs['extra'] = kw
         return msg, kwargs
 
-    # high level logging
-    def dataframe_read(self, myown):
-        d = {'whatever':'we', 'need':'here', 'myown':myown}
-        super().info(d, extra={'dlf_type':'dataframe.read'})
-
 def _json_default(obj):
     """
     Coerce everything to strings.
@@ -87,22 +82,23 @@ class LogstashFormatter(logging.Formatter):
         fields.
         """
 
-        logr =  record
-        timestamp = datetime.datetime.fromtimestamp(loginfo['created']).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        logr = record
+        timestamp = datetime.datetime.fromtimestamp(logr.created).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
-        # loginfo = {k:d.get(k,None) for k in ['created', 'levelname', 'exc_info']}
-        # loginfo['exception'] = None
-        # if loginfo['exc_info']:
-        #     formatted = tb.format_exception(*loginfo['exc_info'])
-        #     loginfo['exception'] = formatted
-        #     loginfo.pop('exc_info')
+        if type(logr.msg) is dict:
+            msg = logr.msg
+        else:
+            msg = {'message': logr.msg}
 
         log_record = {
             'severity': logr.levelname,
-            'session': session,
+            'session': logr.dlf_session,
             '@timestamp': timestamp,
-            'type': type,
-            'fields': fields}
+            'username': logr.dlf_username,
+            'filename': logr.dlf_filename,
+            'msg': msg,
+            'type': logr.dlf_type
+            }
 
         return json.dumps(log_record, default=_json_default)
 
@@ -137,8 +133,6 @@ def init():
 
     md = params.metadata()
 
-    info = dict()
-
     logger = logging.getLogger("dlf")
     level = loggingLevels.get(md['loggers'].get('severity', 'info'))
     logger.setLevel(level)
@@ -148,14 +142,14 @@ def init():
     if p and p['enable'] and KafkaProducer:
 
         level = loggingLevels.get(p.get('severity', 'info'))
-        topic = p.get('topic')
+        topic = p.get('topic', 'dlf')
         hosts = p.get('hosts')
 
         # disable logging for 'kafka.KafkaProducer'
         # to avoid infinite logging recursion on kafka
         logging.getLogger('kafka.KafkaProducer').addHandler(logging.NullHandler())
 
-        formatterLogstash = LogstashFormatter(json.dumps({'extra':info}))
+        formatterLogstash = LogstashFormatter()
         handlerKafka = KafkaLoggingHandler(topic, hosts)
         handlerKafka.setLevel(level)
         handlerKafka.setFormatter(formatterLogstash)
@@ -167,17 +161,10 @@ def init():
         level = loggingLevels.get(p.get('severity', 'info'))
 
         # create console handler and set level to debug
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(dlf_session)s - %(dlf_repo_name)s - %(dlf_username)s - %(dlf_filename)s - %(dlf_type)s - %(message)s') #%(session)s - %(username)s - %(filename)s - %(type)s
-        handler = logging.StreamHandler(sys.stdout,)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(dlf_session)s - %(dlf_repo_name)s - %(dlf_username)s - %(dlf_filename)s - %(dlf_type)s - %(message)s')
+        handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(level)
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
     _logger = LoggerAdapter(logger, extra_attributes())
-
-# logger = dlf.logging.getLogger()
-
-#logger.project()
-#dlf.logger.info(dlf.project.info(), extra={type:'project'})
-
-#logger.dataframe.read(df)
