@@ -158,20 +158,20 @@ class SparkEngine():
                 .option("user", pmd['username']) \
                 .option('password', pmd['password']) \
                 .load(**options)
+        elif pmd['service'] == 'elastic':
+            # uri = 'http://{}:{}/{}'.format(pmd["hostname"], pmd["port"], md['path'])
+            # print(options)
+            obj = self.elastic_read(url, options.get('query', {}))
         elif pmd['service'] == 'oracle':
             url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pmd['username'], pmd['password'], pmd['hostname'],
                                                              pmd.get('port', '1521'), pmd['sid'])
             print(url)
             print(pmd['database'])
-#             print(rmd['path'])
+            print(rmd['path'])
             driver = "oracle.jdbc.driver.OracleDriver"
-            return self._ctx.read.format('jdbc').option('url', url) \
+            obj = self._ctx.read.format('jdbc').option('url', url) \
                 .option("dbtable", "{}.{}".format(pmd['database'], rmd['path'])).option("driver", driver) \
                 .load(**options)
-        elif pmd['service'] == 'elastic':
-            # uri = 'http://{}:{}/{}'.format(pmd["hostname"], pmd["port"], md['path'])
-            # print(options)
-            obj = self.elastic_read(url, options.get('query', {}))
         else:
             raise('downt know how to handle this')
 
@@ -273,7 +273,7 @@ class SparkEngine():
                                                              pmd.get('port', '1521'), pmd['database'])
             print(url)
             driver = "oracle.jdbc.driver.OracleDriver"
-            return obj.write.format('jdbc').option('url', url) \
+            obj.write.format('jdbc').option('url', url) \
                 .option("dbtable", md['path']).option("driver", driver) \
                 .save(**kargs)
         else:
