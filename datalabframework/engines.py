@@ -16,7 +16,6 @@ import pyspark
 from pyspark.sql.functions import desc, lit, date_format
 
 from . import logging
-logger = logging.getLogger()
 
 import pandas as pd
 
@@ -53,6 +52,7 @@ class SparkEngine():
         # os.environ['PYSPARK_SUBMIT_ARGS'] = "--packages org.postgresql:postgresql:42.2.5 pyspark-shell"
         os.environ['PYSPARK_SUBMIT_ARGS'] = submit_args
         print('PYSPARK_SUBMIT_ARGS: {}'.format(submit_args))
+        # logger.info('PYSPARK_SUBMIT_ARGS: {}'.format(submit_args))
 
         conf = SparkConf()
         if 'jobname' in config:
@@ -85,12 +85,16 @@ class SparkEngine():
         return self._ctx
 
     def read(self, resource=None, path=None, provider=None, **kargs):
+        logger = logging.getLogger()
         md = data.metadata(resource, path, provider)
         if not md:
+            logger.exception("No metadata")
             return
         return self._read(md, **kargs)
 
     def _read(self, md, **kargs):
+
+        logger = logging.getLogger()
 
         pmd = md['provider']
         rmd = md['resource']
@@ -115,6 +119,7 @@ class SparkEngine():
         # override options on provider with options on resource, with option on the read method
         options = utils.merge(pmd.get('read',{}).get('options',{}), rmd.get('read',{}).get('options',{}))
         options = utils.merge(options, kargs)
+        logger.info(options)
 
         if pmd['service'] in ['sqlite', 'mysql', 'postgres', 'mssql']:
             format = pmd.get('format', 'rdbms')
@@ -189,6 +194,7 @@ class SparkEngine():
         return obj
 
     def write(self, obj, resource=None, path=None, provider=None, **kargs):
+        logger = logging.getLogger()
         md = data.metadata(resource, path, provider)
         if not md:
             return
@@ -216,6 +222,7 @@ class SparkEngine():
         # override options on provider with options on resource, with option on the read method
         options = utils.merge(pmd.get('write',{}).get('options',{}), rmd.get('write',{}).get('options',{}))
         options = utils.merge(options, kargs)
+        logger.info(options)
 
         obj = obj.cache() if cache else obj
         obj = obj.coalesce(coalesce) if coalesce else obj
@@ -238,7 +245,8 @@ class SparkEngine():
             elif format=='parquet':
                 obj.write.parquet(url, **options)
             else:
-                print('format unknown')
+                # print('format unknown')
+                logger.info('format unknown')
 
         elif pmd['service'] == 'sqlite':
             driver = "org.sqlite.JDBC"
@@ -287,6 +295,7 @@ class SparkEngine():
     def ingest(self, src_resource=None, src_path=None, src_provider=None,
                      dest_resource=None, dest_path=None, dest_provider=None,
                      delete=False):
+        logger = logging.getLogger()
 
         #### contants:
         now = datetime.now()
@@ -295,6 +304,7 @@ class SparkEngine():
         #### Source metadata:
         md_src = data.metadata(src_resource, src_path, src_provider)
         if not md_src:
+            logger.error("No metadata")
             return
 
         # filter settings from src (provider and resource)
@@ -322,7 +332,9 @@ class SparkEngine():
         try:
             df_src = self._read(md_src)
         except Exception as e:
-            print(e)
+            logger.exception(e)
+            # print(e)
+
             return
 
         #### Read schema info
@@ -331,7 +343,7 @@ class SparkEngine():
             df_schema = self.read(path=schema_path,provider=dest_provider)
             schema_date_str = df_schema.sort(desc("date")).limit(1).collect()[0]['id']
         except Exception as e:
-            print(e)
+            logger.exception(e)
             print('schema does not exist yet.')
             schema_date_str = now.strftime('%Y-%m-%dT%H%M%S')
 
@@ -352,7 +364,7 @@ class SparkEngine():
             df_dest_cols = [x for x in df_dest.columns if x not in reserved_cols]
             schema_changed = df_src[df_src_cols].schema.json() != df_dest[df_dest_cols].schema.json()
         except Exception as e:
-            print(e)
+            logger.exception(e)
 
         if schema_changed:
             #Different schema, update schema table with new entry
@@ -367,17 +379,20 @@ class SparkEngine():
             df_upsert, df_delete = dataframe_diff(df_src, df_dest, exclude_cols=reserved_cols)
 
             df_upsert = df_upsert.withColumn('_state', lit(0))
-            print('Added: {}'.format(df_upsert.count()))
+            # print('Added: {}'.format(df_upsert.count()))
+            logger.info({'added': df_upsert.count()}, extra={'dlf_type': 'schema'})
 
             if delete:
                 df_delete = df_delete.withColumn('_state', lit(1))
                 df_diff = df_upsert.union(df_delete)
-                print('Deleted: {}'.format(df_delete.count()))
+                # print('Deleted: {}'.format(df_delete.count()))
+                logger.info('Deleted: {}'.format(df_delete.count()))
             else:
                 df_diff = df_upsert
 
         else:
-            print('No destination data to diff, copy from source')
+            # print('No destination data to diff, copy from source')
+            logger.info('No destination data to diff, copy from source')
             df_diff = df_src.withColumn('_state', lit(0))
 
         # augment with ingest date info

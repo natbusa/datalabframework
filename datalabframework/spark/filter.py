@@ -4,6 +4,10 @@ import dateutil.parser as dp
 from datetime import date, timedelta, datetime
 import pyspark.sql.functions as F
 
+from .. import logging
+
+logger = logging.getLogger()
+
 def filter_by_date(obj, options):
 
     #Get ingest date
@@ -30,8 +34,12 @@ def filter_by_date(obj, options):
     obj = obj.filter(F.to_timestamp(column) < end_date)
     obj = obj.filter(F.to_timestamp(column) >= start_date) if start_date else obj
 
-    print('start date {}, end date {}'.format(start_date.isoformat(), end_date.isoformat()))
-    print('filtered records', obj.count())
+    # print('start date {}, end date {}'.format(start_date.isoformat(), end_date.isoformat()))
+    logger.info('start date {}, end date {}'.format(start_date.isoformat(), end_date.isoformat()),
+                extra={'dlf_type':'engine.read'})
+    # print('filtered records', obj.count())
+    logger.info('filtered records {}'.format(obj.count()),
+                extra={'dlf_type': 'engine.read'})
 
     return obj
 
