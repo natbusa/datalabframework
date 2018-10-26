@@ -245,7 +245,6 @@ class SparkEngine():
             elif format=='parquet':
                 obj.write.parquet(url, **options)
             else:
-                # print('format unknown')
                 logger.info('format unknown')
 
         elif pmd['service'] == 'sqlite':
@@ -333,7 +332,6 @@ class SparkEngine():
             df_src = self._read(md_src)
         except Exception as e:
             logger.exception(e)
-            # print(e)
 
             return
 
@@ -344,7 +342,7 @@ class SparkEngine():
             schema_date_str = df_schema.sort(desc("date")).limit(1).collect()[0]['id']
         except Exception as e:
             logger.exception(e)
-            print('schema does not exist yet.')
+            # print('schema does not exist yet.')
             schema_date_str = now.strftime('%Y-%m-%dT%H%M%S')
 
         # destination path - append schema date
@@ -379,24 +377,22 @@ class SparkEngine():
             df_upsert, df_delete = dataframe_diff(df_src, df_dest, exclude_cols=reserved_cols)
 
             df_upsert = df_upsert.withColumn('_state', lit(0))
-            # print('Added: {}'.format(df_upsert.count()))
-            logger.info({'added': df_upsert.count()}, extra={'dlf_type': 'engine.schema_check'})
+            logger.info({'Added': df_upsert.count()}, extra={'dlf_type': 'engine.schema_check'})
 
             if delete:
                 df_delete = df_delete.withColumn('_state', lit(1))
                 df_diff = df_upsert.union(df_delete)
-                # print('Deleted: {}'.format(df_delete.count()))
                 logger.info('Deleted: {}'.format(df_delete.count()), extra={'dlf_type': 'engine.schema_check'})
             else:
                 df_diff = df_upsert
 
         else:
-            # print('No destination data to diff, copy from source')
-            logger.info('No destination data to diff, copy from source')
+            logger.info('No destination data to diff, copy from source', extra={'dlf_type': 'engine.schema_check'})
             df_diff = df_src.withColumn('_state', lit(0))
 
         # augment with ingest date info
-        if df_diff.count():
+        diff_records = df_diff.count()
+        if diff_records:
             partition_cols = ['_ingestdate']
             df_diff = df_diff.withColumn('_ingestdate', lit(now.strftime('%Y-%m-%dT%H%M%S')))
 
@@ -415,7 +411,7 @@ class SparkEngine():
                      'source_option': filter,
                      'schema_change': schema_changed,
                      'target': dest_path,
-                     'records': df_diff.count(),
+                     'records': diff_records,
                      'diff_time': time_diff.total_seconds()},
                     extra={'dlf_type': 'engine.ingest'})
 
