@@ -40,6 +40,8 @@ def _url(md):
         url = "jdbc:postgresql://{}:{}/{}".format(pmd['hostname'],pmd.get('port', '5432'),pmd['database'])
     elif pmd['service'] == 'mssql':
         url = "jdbc:sqlserver://{}:{};databaseName={}".format(pmd['hostname'],pmd.get('port', '1433'),pmd['database'])
+    elif pmd['service'] == 'oracle':
+        url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pmd['username'], pmd['password'], pmd['hostname'],pmd.get('port', '1521'), pmd['database'])
     elif pmd['service'] == 'elastic':
         url = 'http://{}:{}/{}'.format(pmd["hostname"], pmd.get("port", 9200), rmd['path'])
     else:

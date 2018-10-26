@@ -16,7 +16,6 @@ import pyspark
 from pyspark.sql.functions import desc, lit, date_format
 
 from . import logging
-
 import pandas as pd
 
 # purpose of engines
@@ -52,7 +51,6 @@ class SparkEngine():
         # os.environ['PYSPARK_SUBMIT_ARGS'] = "--packages org.postgresql:postgresql:42.2.5 pyspark-shell"
         os.environ['PYSPARK_SUBMIT_ARGS'] = submit_args
         print('PYSPARK_SUBMIT_ARGS: {}'.format(submit_args))
-        # logger.info('PYSPARK_SUBMIT_ARGS: {}'.format(submit_args))
 
         conf = SparkConf()
         if 'jobname' in config:
@@ -93,7 +91,6 @@ class SparkEngine():
         return self._read(md, **kargs)
 
     def _read(self, md, **kargs):
-
         logger = logging.getLogger()
 
         pmd = md['provider']
@@ -119,7 +116,6 @@ class SparkEngine():
         # override options on provider with options on resource, with option on the read method
         options = utils.merge(pmd.get('read',{}).get('options',{}), rmd.get('read',{}).get('options',{}))
         options = utils.merge(options, kargs)
-        # logger.info(options)
 
         if pmd['service'] in ['sqlite', 'mysql', 'postgres', 'mssql']:
             format = pmd.get('format', 'rdbms')
@@ -175,6 +171,14 @@ class SparkEngine():
                 .option("user", pmd['username']) \
                 .option('password', pmd['password']) \
                 .load(**options)
+        elif pmd['service'] == 'oracle':
+            driver = "oracle.jdbc.driver.OracleDriver"
+            obj = self._ctx.read \
+                .format('jdbc') \
+                .option('url', url) \
+                .option("dbtable", rmd['path']) \
+                .option("driver", driver) \
+                .load(**options)
         elif pmd['service'] == 'elastic':
             # uri = 'http://{}:{}/{}'.format(pmd["hostname"], pmd["port"], md['path'])
             # print(options)
@@ -195,6 +199,7 @@ class SparkEngine():
 
     def write(self, obj, resource=None, path=None, provider=None, **kargs):
         logger = logging.getLogger()
+
         md = data.metadata(resource, path, provider)
         if not md:
             return
@@ -222,7 +227,6 @@ class SparkEngine():
         # override options on provider with options on resource, with option on the read method
         options = utils.merge(pmd.get('write',{}).get('options',{}), rmd.get('write',{}).get('options',{}))
         options = utils.merge(options, kargs)
-        logger.info(options)
 
         obj = obj.cache() if cache else obj
         obj = obj.coalesce(coalesce) if coalesce else obj
@@ -277,6 +281,14 @@ class SparkEngine():
                 .option("user", pmd['username']) \
                 .option('password', pmd['password']) \
                 .save(**kargs)
+        elif pmd['service'] == 'oracle':
+            driver = "oracle.jdbc.driver.OracleDriver"
+            obj.write \
+                .format('jdbc') \
+                .option('url', url) \
+                .option("dbtable", rmd['path']) \
+                .option("driver", driver) \
+                .save(**kargs)
         elif pmd['service'] == 'elastic':
             uri = 'http://{}:{}'.format(pmd["hostname"], pmd["port"])
             mode = kargs.get("mode", None)
@@ -294,6 +306,7 @@ class SparkEngine():
     def ingest(self, src_resource=None, src_path=None, src_provider=None,
                      dest_resource=None, dest_path=None, dest_provider=None,
                      delete=False):
+
         logger = logging.getLogger()
 
         #### contants:
