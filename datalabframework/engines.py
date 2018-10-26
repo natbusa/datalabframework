@@ -119,7 +119,7 @@ class SparkEngine():
         # override options on provider with options on resource, with option on the read method
         options = utils.merge(pmd.get('read',{}).get('options',{}), rmd.get('read',{}).get('options',{}))
         options = utils.merge(options, kargs)
-        logger.info(options)
+        # logger.info(options)
 
         if pmd['service'] in ['sqlite', 'mysql', 'postgres', 'mssql']:
             format = pmd.get('format', 'rdbms')
@@ -380,13 +380,13 @@ class SparkEngine():
 
             df_upsert = df_upsert.withColumn('_state', lit(0))
             # print('Added: {}'.format(df_upsert.count()))
-            logger.info({'added': df_upsert.count()}, extra={'dlf_type': 'schema'})
+            logger.info({'added': df_upsert.count()}, extra={'dlf_type': 'engine.schema_check'})
 
             if delete:
                 df_delete = df_delete.withColumn('_state', lit(1))
                 df_diff = df_upsert.union(df_delete)
                 # print('Deleted: {}'.format(df_delete.count()))
-                logger.info('Deleted: {}'.format(df_delete.count()))
+                logger.info('Deleted: {}'.format(df_delete.count()), extra={'dlf_type': 'engine.schema_check'})
             else:
                 df_diff = df_upsert
 
@@ -406,6 +406,18 @@ class SparkEngine():
 
             options = {'mode':'append', 'partitionBy':partition_cols}
             self.write(df_diff, path=dest_path, provider=md_dest['resource']['provider'], **options)
+
+        end = datetime.now()
+        time_diff = end - now
+
+        logger.info({'src_url': md_src['url'],
+                     'src_table': md_src['resource']['path'],
+                     'source_option': filter,
+                     'schema_change': schema_changed,
+                     'target': dest_path,
+                     'records': df_diff.count(),
+                     'diff_time': time_diff.total_seconds()},
+                    extra={'dlf_type': 'engine.ingest'})
 
 def elastic_read(url, query):
     """
