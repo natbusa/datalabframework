@@ -44,7 +44,8 @@ setup_args['install_requires']=[
     'elasticsearch',
     'gitpython',
     'jsonschema',
-    'python-dateutil'
+    'python-dateutil',
+    'kafka-python'
 ]
 
 setup_args['include_package_data'] = True
