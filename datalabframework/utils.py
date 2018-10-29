@@ -29,12 +29,6 @@ from copy import deepcopy
 import git
 
 def merge(a, b):
-    if not a:
-        a = dict()
-
-    if not b:
-        b = dict()
-
     if isinstance(b, dict) and isinstance(a, dict):
         a_and_b = set(a.keys()) & set(b.keys())
         every_key = set(a.keys()) | set(b.keys())

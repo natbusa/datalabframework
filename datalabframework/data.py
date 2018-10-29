@@ -40,6 +40,8 @@ def _url(md):
         url = "jdbc:postgresql://{}:{}/{}".format(pmd['hostname'],pmd.get('port', '5432'),pmd['database'])
     elif pmd['service'] == 'mssql':
         url = "jdbc:sqlserver://{}:{};databaseName={}".format(pmd['hostname'],pmd.get('port', '1433'),pmd['database'])
+    elif pmd['service'] == 'oracle':
+        url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(pmd['username'], pmd['password'], pmd['hostname'],pmd.get('port', '1521'), pmd['database'])
     elif pmd['service'] == 'elastic':
         url = 'http://{}:{}/{}'.format(pmd["hostname"], pmd.get("port", 9200), rmd['path'])
     else:
@@ -47,28 +49,68 @@ def _url(md):
 
     return url
 
+def _get_resource_metadata(path=None, provider=None):
+    md = params.metadata()
+
+    if provider:
+        for resource_name in md['resources'].keys():
+            resource = md['resources'][resource_name]
+            if str(resource.get('path')) == path and \
+               str(resource.get('provider')) == provider:
+                return resource
+
+    # if nothing yet, try with path alone
+    for resource_name in md['resources'].keys():
+        resource = md['resources'][resource_name]
+        if str(resource.get('path')) == path:
+            return resource
+
+    #still nothing use path and provider as minimal resource info
+    path = path if path else md['resources'].get(provider, {}).get('path')
+    return { 'path':path, 'provider':provider } if path else None
+
 def metadata(resource=None, path=None, provider=None):
     md = params.metadata()
 
-    ds = md['resources'].get(uri(resource))
-    pd = md['providers'].get(provider)
+    # get the resource, either from resource name or path+provider
+    rmd = md['resources'].get(uri(resource)) if resource else _get_resource_metadata(path, provider)
 
-    if ds and ds['provider'] in md['providers']:
-        pd = md['providers'][ds['provider']]
-        d = {'resource':ds, 'provider':pd}
-
-    elif pd and path:
-        d = {
-            'provider': pd,
-            'resource':{
-                'path':path,
-                'provider':provider
-                }
-            }
-    else:
+    # no sufficient info to construct a valid resource
+    if not rmd:
         print('Resource not found: must specify either path and provider alias, or the resource alias')
-        print('resource={}, path={}, provider={}'.format(resource, path, provider))
+        print('Debug: resource={}, path={}, provider={}'.format(resource, path, provider))
         return None
 
+    # check consistency in metadata
+    if rmd.get('provider') not in md['providers']:
+        #print("resource provider '{}' not in the list of known providers".format(rmd['provider']))
+        rmd['provider'] = provider
+
+    # check consistency in metadata
+    if provider and rmd['provider'] and rmd['provider'] != provider:
+        print("Using the provider '{}' and instead of resource provider '{}'".format(provider, rmd['provider']))
+        rmd['provider'] = provider
+
+    # get the provider
+    pmd =  md['providers'].get(rmd['provider'])
+
+    if not pmd:
+        print('Provider not found: must specify either path and provider alias, or the resource alias')
+        print('Debug: resource={}, path={}, provider={}'.format(resource, path, provider))
+        return None
+
+    #connstruct resource
+    d = {'resource': rmd, 'provider':pmd}
+
+    #cleanup
+    if 'path' in d['resource']:
+        d['resource']['path'] = str(d['resource']['path'])
+
+    if 'path' in d['provider']:
+        d['provider']['path'] = str(d['provider']['path'])
+
+    # augment resource metadata
     d['url'] = _url(d)
+
+    #that's all
     return d

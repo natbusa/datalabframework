@@ -3,6 +3,8 @@ type : object
 properties:
   profile:
     type: string
+  inherit:
+    type: string
   engines:
     type: object
   providers:

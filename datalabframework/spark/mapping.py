@@ -8,7 +8,7 @@ def transform(df, settings):
     :return:
 
     read:
-        settings:
+        mapping:
             extra:
                 drop: true
             ma_vt:
