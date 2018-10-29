@@ -174,7 +174,7 @@ class SparkEngine():
             obj = self._ctx.read \
                 .format('jdbc') \
                 .option('url', url) \
-                .option("dbtable", rmd['path']) \
+                .option("dbtable", "{}.{}".format(pmd['database'], rmd['path'])) \
                 .option("driver", driver) \
                 .load(**options)
         elif pmd['service'] == 'elastic':
@@ -284,7 +284,7 @@ class SparkEngine():
             obj.write \
                 .format('jdbc') \
                 .option('url', url) \
-                .option("dbtable", rmd['path']) \
+                .option("dbtable", "{}.{}".format(pmd['database'], rmd['path'])) \
                 .option("driver", driver) \
                 .save(**kargs)
         elif pmd['service'] == 'elastic':
