@@ -35,14 +35,6 @@ providers:
         hostname: hdfs-nn
         path: /data/ingest/extract
         format: parquet
-    abalone:
-        service: local
-        path: ../data/datasets/raw/abalone
-        format: jsonl
-    winequality:
-        service: local
-        path: ../data/datasets/raw/winequality/
-        format: csv
 
 resources:
     albums:

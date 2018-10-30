@@ -1,7 +1,7 @@
 import builtins
 builtins.__DATALABFRAMEWORK__=True
 
-from version import version_info, __version__
+from ._version import version_info, __version__
 
 # automatically imports submodules
 # by loading the package, as in `import datalabframework as dlf`
