@@ -119,8 +119,7 @@ class KafkaLoggingHandler(logging.Handler):
             self.producer.flush()
             if hasattr(KafkaProducer, 'stop'):
                 self.producer.stop()
-            else:
-                self.producer.close()
+            self.producer.close()
         logging.Handler.close(self)
 
 loggingLevels = {
