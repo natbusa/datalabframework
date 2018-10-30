@@ -6,9 +6,8 @@ import pyspark.sql.functions as F
 
 from .. import logging
 
-logger = logging.getLogger()
-
 def filter_by_date(obj, options):
+    logger = logging.getLogger()
 
     #Get ingest date
     now = datetime.now()
