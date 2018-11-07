@@ -113,9 +113,9 @@ def render(metadata_source, passes=3):
     # quick hack to speed up things
     # don't render resources
     resources = {}
-    for k,v in metadata_source.items():
-      resources[k] = v['resources']
-      v['resources']={}
+    for k,v in deepcopy(metadata_source).items():
+        resources[k] = v['resources']
+        v['resources']={}
     # end hack
 
     doc = json.dumps(metadata_source)
@@ -131,10 +131,7 @@ def render(metadata_source, passes=3):
     # quick hack to speed up things
     # reinsert resources in metadata
     for k,v in metadata_rendered.items():
-      v['resources']=resources[k]
-    
-    for k,v in metadata_source.items():
-      v['resources']=resources[k]
+        v['resources']=resources[k]
     # end hack
     
     end = datetime.datetime.now()
