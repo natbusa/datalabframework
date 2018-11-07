@@ -13,7 +13,7 @@ import elasticsearch.helpers
 from datetime import datetime
 
 import pyspark
-from pyspark.sql.functions import desc, date_format
+from pyspark.sql.functions import desc, date_format, from_utc_timestamp
 
 from . import logging
 
@@ -124,6 +124,7 @@ class SparkEngine:
         rmd = md['resource']
 
         url = md['url']
+        print(url, rmd['path'])
 
         cache = pmd.get('read', {}).get('cache', False)
         cache = rmd.get('read', {}).get('cache', cache)
@@ -243,6 +244,7 @@ class SparkEngine:
         rmd = md['resource']
 
         url = md['url']
+        print('write_url', url)
 
         cache = pmd.get('write', {}).get('cache', False)
         cache = rmd.get('write', {}).get('cache', cache)
@@ -423,7 +425,8 @@ class SparkEngine:
         if not eventsourcing:
             if filter_params.get('policy') == 'date' and filter_params.get('column'):
                 df_diff = dataframe_update(df_src, df_dest, updated_col='_ingested', eventsourcing=eventsourcing)
-                df_diff = df_diff.withColumn('_date', date_format(filter_params['column'], 'yyyy-MM-dd'))
+                df_diff = df_diff.withColumn('_date', date_format(from_utc_timestamp(filter_params['column'], 'GMT+7'), 'yyyy-MM-dd'))
+                df_diff.show()
                 partition_cols += ['_date']
                 ingest_mode = 'append'
                 options = {'mode': ingest_mode, 'partitionBy': partition_cols}
