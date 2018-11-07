@@ -166,9 +166,9 @@ def repo_data():
         }
     return msg
 
-
 def import_env(env_file='.env'):
-    with open(env_file) as f:
-        for l in f:
-            d = l.strip().split('=')
-            os.environ[d[0]] = d[1]
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            for l in f:
+                d = l.strip().split('=')
+                os.environ[d[0]] = d[1]
