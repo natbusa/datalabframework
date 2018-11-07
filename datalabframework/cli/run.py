@@ -13,6 +13,27 @@ from traitlets import (
 )
 
 
+def preprocess_cell(self, cell, resources, cell_index):
+    """
+    Executes a single code cell. See base.py for details.
+    To execute all cells see :meth:`preprocess`.
+    """
+    if cell.cell_type != 'code':
+        return cell, resources
+
+    print('Input cell: {}'.format(cell['source']))
+    reply, outputs = self.run_cell(cell, cell_index)
+    print('Output: {}'.format(outputs))
+    cell.outputs = outputs
+
+    if not self.allow_errors:
+        for out in outputs:
+            if out.output_type == 'error':
+                raise CellExecutionError.from_cell_and_msg(cell, out)
+        if (reply is not None) and reply['content']['status'] == 'error':
+            raise CellExecutionError.from_cell_and_msg(cell, reply['content'])
+    return cell, resources
+
 class DlfRunApp(DatalabframeworkApp):
     name = Unicode(u'datalabframework-run')
     description = "Executing a datalabframework notebook"
@@ -110,12 +131,18 @@ class DlfRunApp(DatalabframeworkApp):
         nc = nbformat.v4.new_code_cell(init_str)
         nb['cells'].insert(0, nc)
 
+        resources = {}
+        resources['metadata'] = {'path': os.getcwd()}
+
+        (nb_out, resources_out) = self.ep.preprocess(nb, resources)
+
     def start(self):
         for notebook_filename in self.notebooks:
             self.run_single_notebook(notebook_filename)
 
 
 def main():
+    ExecutePreprocessor.preprocess_cell = preprocess_cell
     app = DlfRunApp()
     app.initialize()
     app.start()
