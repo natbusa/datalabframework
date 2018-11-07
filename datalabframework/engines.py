@@ -124,7 +124,6 @@ class SparkEngine:
         rmd = md['resource']
 
         url = md['url']
-        print(url, rmd['path'])
 
         cache = pmd.get('read', {}).get('cache', False)
         cache = rmd.get('read', {}).get('cache', cache)
@@ -244,7 +243,6 @@ class SparkEngine:
         rmd = md['resource']
 
         url = md['url']
-        print('write_url', url)
 
         cache = pmd.get('write', {}).get('cache', False)
         cache = rmd.get('write', {}).get('cache', cache)
