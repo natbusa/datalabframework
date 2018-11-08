@@ -352,6 +352,9 @@ class SparkEngine:
         filter_params = utils.merge(
             md_src['provider'].get('read', {}).get('filter', {}),
             md_src['resource'].get('read', {}).get('filter', {}))
+        
+        # get tzone:
+        tzone = md_src['provider'].get('tzone', 'UTC')
 
         #### Target metadata:
 
@@ -423,7 +426,7 @@ class SparkEngine:
         if not eventsourcing:
             if filter_params.get('policy') == 'date' and filter_params.get('column'):
                 df_diff = dataframe_update(df_src, df_dest, updated_col='_ingested', eventsourcing=eventsourcing)
-                df_diff = df_diff.withColumn('_date', date_format(from_utc_timestamp(filter_params['column'], 'GMT+7'), 'yyyy-MM-dd'))
+                df_diff = df_diff.withColumn('_date', date_format(from_utc_timestamp(filter_params['column'], tzone), 'yyyy-MM-dd'))
                 partition_cols += ['_date']
                 ingest_mode = 'append'
                 options = {'mode': ingest_mode, 'partitionBy': partition_cols}
