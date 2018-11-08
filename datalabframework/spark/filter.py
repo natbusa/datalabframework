@@ -31,8 +31,14 @@ def filter_by_date(obj, options):
         start_date = end_date - window
 
     # build condition
-    obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) < end_date)
-    obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) >= start_date) if start_date else obj
+    if '_date' in obj.columns:
+        obj = obj.filter(F.to_timestamp('_date') < end_date)
+        obj = obj.filter(F.to_timestamp('_date') >= start_date) if start_date else obj
+
+#     obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) < end_date)
+#     obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) >= start_date) if start_date else obj
+    obj = obj.filter(F.to_timestamp(column) < end_date)
+    obj = obj.filter(F.to_timestamp(column) >= start_date) if start_date else obj
 
     # print('start date {}, end date {}'.format(start_date.isoformat(), end_date.isoformat()))
     if start_date:
