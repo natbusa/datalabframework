@@ -354,7 +354,7 @@ class SparkEngine:
             md_src['resource'].get('read', {}).get('filter', {}))
         
         # get tzone:
-        tzone = md_src['provider'].get('tzone', 'UTC')
+        tzone = filter_params.get('tzone', 'UTC')
 
         #### Target metadata:
 
