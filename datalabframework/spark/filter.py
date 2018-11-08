@@ -16,13 +16,14 @@ def filter_by_date(obj, options):
     end_date_str = options.get('end_date')
     start_date_str = options.get('start_date')
     window_str = options.get('window')
+    tzone = options.get('tzone', 'GMT')
 
     # Get ingest key column
     column = options.get('column')
 
     # defaults
-    end_date = dp.parse(end_date_str) if end_date_str else today
-    start_date = dp.parse(start_date_str) if start_date_str else None
+    end_date = dp.isoparse(end_date_str) if end_date_str else today
+    start_date = dp.isoparse(start_date_str) if start_date_str else None
     window = pd.to_timedelta(window_str) if window_str else None
 
     # default calculated from window and end_date if both present
@@ -30,8 +31,8 @@ def filter_by_date(obj, options):
         start_date = end_date - window
 
     # build condition
-    obj = obj.filter(F.to_timestamp(column) < end_date)
-    obj = obj.filter(F.to_timestamp(column) >= start_date) if start_date else obj
+    obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) < end_date)
+    obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) >= start_date) if start_date else obj
 
     # print('start date {}, end date {}'.format(start_date.isoformat(), end_date.isoformat()))
     if start_date:
