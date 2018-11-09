@@ -11,7 +11,7 @@ def filter_by_date(obj, options):
     logger = logging.getLogger()
 
     # Get ingest date
-    today = datetime.combine(date.today(), datetime.min.time())
+    now = datetime.now()
 
     end_date_str = options.get('end_date')
     start_date_str = options.get('start_date')
@@ -21,8 +21,12 @@ def filter_by_date(obj, options):
     # Get ingest key column
     column = options.get('column')
 
+    # get type date column
+    datecol_type = obj.select(column).dtypes[0][1]
+
     # defaults
-    end_date = dp.isoparse(end_date_str) if end_date_str else today
+    end_date = dp.isoparse(end_date_str) if end_date_str else now
+
     start_date = dp.isoparse(start_date_str) if start_date_str else None
     window = pd.to_timedelta(window_str) if window_str else None
 
@@ -32,11 +36,18 @@ def filter_by_date(obj, options):
 
     # build condition
     if '_date' in obj.columns:
-        obj = obj.filter(F.to_timestamp('_date') < end_date)
-        obj = obj.filter(F.to_timestamp('_date') >= start_date) if start_date else obj
+        obj = obj.filter(F.col('_date') < end_date)
+        obj = obj.filter(F.col('_date') >= start_date) if start_date else obj
+ 
+    f = F.col(column)
+    if datecol_type not in ['timestamp']:
+        f = F.to_timestamp(f)
 
-    obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) < end_date)
-    obj = obj.filter(F.to_utc_timestamp(F.to_timestamp(column), tzone) >= start_date) if start_date else obj
+    if tzone != 'GMT':
+        f = F.to_utc_timestamp(f, tzone)
+
+    obj = obj.filter(f < end_date)
+    obj = obj.filter(f >= start_date) if start_date else obj
 
     # print('start date {}, end date {}'.format(start_date.isoformat(), end_date.isoformat()))
     if start_date:
