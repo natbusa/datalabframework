@@ -50,6 +50,11 @@ class SparkEngine:
             submit_packages = ','.join(packages)
             submit_args = '{} --packages {}'.format(submit_args, submit_packages)
 
+        pyfiles = config.get('py-files', [])
+        if pyfiles:
+            submit_pyfiles = ','.join(pyfiles)
+            submit_args = '{} --py-files {}'.format(submit_args, submit_pyfiles)
+
         submit_args = '{} pyspark-shell'.format(submit_args)
 
         # os.environ['PYSPARK_SUBMIT_ARGS'] = "--packages org.postgresql:postgresql:42.2.5 pyspark-shell"
