@@ -23,7 +23,7 @@ def load(profile=None, workdir=None, dotenv_path=None):
     :param dotenv_path: load variable from a dotenv file (default: <rootdir>/.env)
     :return:
     """
-    c = Config(profile=profile, workdir=workdir, dotenv_path=dotenv_path)
+    c = Config(profile=profile, wordir_path=workdir, dotenv_path=dotenv_path)
 
 def config():
     """
