@@ -97,6 +97,10 @@ def merge(a, b):
         a_and_b = set(a.keys()) & set(b.keys())
         every_key = set(a.keys()) | set(b.keys())
         return {k: merge(a[k], b[k]) if k in a_and_b else deepcopy(a[k] if k in a else b[k]) for k in every_key}
+    
+    #if b is None, inherit from a
+    if not b:
+        return deepcopy(a)
 
     #if a and b are both not instances, keep b
     return deepcopy(b)
