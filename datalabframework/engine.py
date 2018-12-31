@@ -100,6 +100,8 @@ class SparkEngine(Engine):
                 packages.append('org.xerial:sqlite-jdbc:jar:3.25.2')
             elif v['service'] == 'postgres':
                 packages.append('org.postgresql:postgresql:42.2.5')
+            elif v['service'] == 'mssql':
+                packages.append('com.microsoft.sqlserver:mssql-jdbc:6.4.0.jre8')
 
         if packages:
             submit_packages = ','.join(packages)
