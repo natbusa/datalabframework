@@ -126,7 +126,7 @@ class DlfRunApp(DatalabframeworkApp):
             # added by dlf-run
             import datalabframework as dlf
             dlf.project.Config('{}', '{}', '{}')
-            """.format(cwd, fullpath_filename, self.profile))
+            """.format(fullpath_filename, self.profile, cwd))
 
         nc = nbformat.v4.new_code_cell(init_str)
         nb['cells'].insert(0, nc)
