@@ -135,7 +135,7 @@ class DlfRunApp(DatalabframeworkApp):
             # added by dlf-run
             import datalabframework
             datalabframework.files.set_current_filename('{fullpath_filename}')
-            datalabframework.project.load(profile='{self.profile}', rootdir_path='{self.rootdir}', dotenv_path='{self.dotenv}')
+            datalabframework.project.load(profile='{self.profile}', rootdir_path='{self.rootdir}', dotenv='{self.dotenv}')
             """)
 
         nc = nbformat.v4.new_code_cell(init_str)
