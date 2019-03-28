@@ -1,0 +1,24 @@
+stages:
+- ingest
+
+.image:
+  image:
+    name: $IMAGE
+    entrypoint: ["start.sh"]
+  stage: ingest
+  tags: [data, docker]
+
+fullscan:
+  extends: .image
+  script:
+  - datalabframework run --timeout=-1 --profile=prod src/fullscan.ipynb
+  only:
+  - triggers
+
+daily:
+  extends: .image
+  script:
+  - datalabframework run --timeout=-1 --profile=prod src/daily.ipynb
+  only:
+  - schedules
+  - web

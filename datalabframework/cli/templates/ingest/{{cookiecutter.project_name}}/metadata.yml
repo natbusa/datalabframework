@@ -1,8 +1,10 @@
 ---
 profile: default
 variables:
-  date_end: "{{ env('DATE_END', now('GMT') ) }}"
+  {% raw -%}
+  date_end: "{{ env('DATE_END',now('GMT')) }}"
   date_window: "{{ env('DATE_WINDOW','31 days') }}"
+  {%- endraw %}
 
 providers:
   source:
@@ -13,10 +15,10 @@ providers:
     format: 
     username: 
     password: 
-
+    {% raw -%}
     date_window: "{{ variables.date_window }}"
     date_end: "{{ variables.date_end }}"
-
+    {%- endraw %}
 
   target:
     host: 
@@ -26,28 +28,28 @@ providers:
     format: 
     username: 
     password: 
-
+    {% raw -%}
     date_window: "{{ variables.date_window }}"
     date_end: "{{ variables.date_end }}"
-    
+    {%- endraw %}
     date_partition: True
     update_column: True
     state_column: True
     hash_column: True
-    
+
 engine:
     type: spark
     master: 
     timezone: GMT
     timestamps: naive
     config:
-        spark.sql.shuffle.partitions: 8
-        spark.default.parallelism: 8
-        
+        spark.sql.shuffle.partitions: 
+        spark.default.parallelism: 
+
 loggers:
   root:
     severity: info
-    
+
   datalabframework:
       name: dlf
       stream:
@@ -61,7 +63,7 @@ loggers:
 
 ---
 profile: prod
-    
+
 ---
 profile: test
 providers:
