@@ -23,7 +23,7 @@ def _url(d):
     elif service == 'mssql':
         url = 'jdbc:sqlserver://{}:{};databaseName={}'.format(d['host'], d['port'], d['database'])
     elif service == 'oracle':
-        url = "jdbc:oracle:thin:{}/{}@//{}:{}/{}".format(d['username'], d['password'], d['host'], d['port'], d['database'])
+        url = 'jdbc:oracle:thin:@//{}:{}/{}'.format(d['host'], d['port'], d['database'])
     elif service == 'elastic':
         url = 'http://{}:{}/{}'.format(d['host'], d['port'], d['database'])
     else:
