@@ -880,7 +880,7 @@ class SparkEngine(Engine):
                 elif md['service'] == 'oracle':
                     query = "(SELECT table_name, table_type FROM all_tables WHERE table_schema='{md['database']}') as query"
                 elif md['service'] == 'mysql':
-                    query = f"(SELECT table_name, table_type FROM information_schema.tables where table_schema='{md['database']}') as query"
+                    query = f"(SELECT table_name, table_type FROM information_schema.tables where table_schema='{md['database'].split('?')[0]}') as query"
                 elif md['service'] == 'postgres':
                     query = f"""
                         ( SELECT table_name, table_type
