@@ -107,7 +107,7 @@ def view(df, state_col='_state', updated_col='_updated', hash_col='_hash'):
 
 def diff(df_a, df_b, exclude_cols=[]):
     """
-    Returns all columns of a which are not in b.
+    Returns all rows of a which are not in b.
     Column ordering as provided by the second dataframe
 
     :param df_a: first dataframe
