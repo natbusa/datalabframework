@@ -131,8 +131,8 @@ class DlfRunApp(DatalabframeworkApp):
         init_str = dedent(f"""
             # added by dlf-run
             import datalabframework
-            datalabframework.files.set_current_filename('{fullpath_filename}')
-            datalabframework.project.load(profile='{self.profile}', rootdir_path='{self.rootdir}')
+            datalabframework.files.set_script_path('{fullpath_filename}')
+            datalabframework.project.load(profile='{self.profile}', rootpath='{self.rootdir}')
             """)
 
         nc = nbformat.v4.new_code_cell(init_str)
