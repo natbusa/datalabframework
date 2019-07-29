@@ -274,6 +274,9 @@ def get_format(md):
         return md['format']
     
     # get the provider format
+    if md['service'] in ['hdfs']:
+        return 'parquet'
+
     if md['service'] in ['sqlite', 'mysql', 'postgres', 'mssql', 'oracle']:
         return 'jdbc'
 
